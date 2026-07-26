@@ -1,0 +1,14 @@
+{
+  "name": "webhook-delivery",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-force-exit"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "dotenv": "^16.4.5"
+  }
+}
