@@ -8,11 +8,11 @@ After building the Postgres-backed job queue and learning the core concepts, saf
 
 ```mermaid
 flowchart LR
-    C[send-event.js /<br/>POST /events] --> S[server.js]
-    C2[POST /subscriptions] --> S
-    S -->|hset / sadd / zadd| R[(Redis)]
-    D[dispatcher.js<br/>via run-dispatcher.js] -->|zrangebyscore + zrem| R
-    D -->|sign, then POST| RV[receiver.js<br/>subscriber]
+    C["send-event.js<br/>POST /events"] --> S["server.js"]
+    C2["POST /subscriptions"] --> S
+    S -->|hset / sadd / zadd| R[("Redis")]
+    D["dispatcher.js<br/>via run-dispatcher.js"] -->|zrangebyscore + zrem| R
+    D -->|sign, then POST| RV["receiver.js<br/>subscriber"]
     RV -->|verify, respond| D
 ```
 
@@ -33,19 +33,13 @@ Three separate processes, on purpose, not one script doing everything:
 
 ## Setup
 
-\`\`\`bash
+```bash
 docker compose up -d --wait
 npm install
 cp .env.example .env
-\`\`\`
+```
 
 Registering your first subscriber and finishing `.env` is covered in the Demo section below.
-
-```bash
-# with server.js running (see Demo below), POST to /subscriptions:
-# { "url": "http://localhost:3001/" }
-# copy the returned "secret" into .env as SUBSCRIBER_SECRET
-```
 
 ## Demo
 
@@ -77,7 +71,7 @@ Watch terminals 2 and 3: the delivery fails twice with a growing delay (backoff 
 npm test
 ```
 
-The tests need a running Redis instance, docker compose up -d --wait provides it.
+The tests need a running Redis instance, `docker compose up -d --wait` provides it.
 
 `retry.test.js` spins up a real throwaway HTTP server per test (no mocking) and proves, against the actual `dispatcher.js` functions:
 
