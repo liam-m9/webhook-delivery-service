@@ -41,12 +41,6 @@ cp .env.example .env
 
 Registering your first subscriber and finishing `.env` is covered in the Demo section below.
 
-```bash
-# with server.js running (see Demo below), POST to /subscriptions:
-# { "url": "http://localhost:3001/" }
-# copy the returned "secret" into .env as SUBSCRIBER_SECRET
-```
-
 ## Demo
 
 Four terminals. `.env` changes only take effect on restart, so update `SUBSCRIBER_SECRET` *before* starting `receiver.js`, not after.
