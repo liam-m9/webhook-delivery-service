@@ -5,18 +5,30 @@ import redis from "./redis.ts";
 const BASE_DELAY = 5000; // 5000ms = 5s
 
 export async function getDueEntries(batchSize: number) {
-  const dueDeliveryIds = await redis.zrangebyscore(
-    "retry:zset",
-    "-inf",
-    Date.now(),
-    "LIMIT",
-    0,
-    batchSize,
-  );
-  if (dueDeliveryIds.length > 0) {
-    await redis.zrem("retry:zset", dueDeliveryIds);
-    return dueDeliveryIds;
-  } else return [];
+  const limitArgs = ["LIMIT", "0", String(batchSize)];
+
+  const atomicScript = `
+    local items = redis.call('ZRANGEBYSCORE', KEYS[1], ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5]) 
+    if #items > 0 then 
+      redis.call('ZREM', KEYS[1], unpack(items))
+    end 
+    return items
+   `;
+
+  try {
+    const dueDeliveryIds = (await redis.eval(
+      atomicScript,
+      1, // number of set
+      "retry:zset",
+      "-inf", // min score
+      Date.now().toString(), // max score
+      ...limitArgs,
+    )) as string[];
+    return dueDeliveryIds ?? [];
+  } catch (e: unknown) {
+    console.error(e);
+    return [];
+  }
 }
 
 export async function signDueEntries() {
@@ -64,6 +76,7 @@ export async function signDueEntries() {
       if (!response.ok) {
         const backOffDelay = BASE_DELAY * 2 ** Number(data.attempts);
         const cappedDelay = Math.min(backOffDelay, 300000);
+
         // hmget/hget always returns strings
         if (Number(data.attempts) + 1 >= Number(data.max_attempts)) {
           await redis.hset(`delivery:${entry}`, { status: "dead" });

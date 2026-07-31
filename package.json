@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --test-force-exit",
+    "test": "node --import tsx --test --test-force-exit tests/*.test.ts",
     "typecheck": "tsc"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.2",
+    "tsx": "^4.23.1",
     "typescript": "^7.0.2"
   }
 }

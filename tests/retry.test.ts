@@ -3,9 +3,9 @@ import assert from "node:assert";
 import type { AddressInfo } from "node:net";
 import { createServer } from "http";
 import crypto from "crypto";
-import { sign, verify } from "./signer.js";
-import { signDueEntries } from "./dispatcher.js";
-import redis from "./redis.js";
+import { sign, verify } from "../signer.ts";
+import { getDueEntries, signDueEntries } from "../dispatcher.ts";
+import redis from "../redis.ts";
 
 test("retrying until success", async () => {
   let callCount = 0;

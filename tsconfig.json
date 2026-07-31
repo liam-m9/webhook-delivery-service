@@ -9,8 +9,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["*.ts"]
+  "include": ["*.ts", "tests/retry.test.ts"]
 }
-
-
-
