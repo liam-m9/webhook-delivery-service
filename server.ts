@@ -1,5 +1,5 @@
 import "dotenv/config";
-import redis from "./redis.js";
+import redis from "./redis.ts";
 import crypto from "crypto";
 import express from "express";
 

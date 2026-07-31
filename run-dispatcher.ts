@@ -1,15 +1,17 @@
-import { signDueEntries } from "./dispatcher.js";
+import { signDueEntries } from "./dispatcher.ts";
 
 console.log(`Dispatcher starting... `);
 
-let currentTick = null;
+let currentTick: Promise<void> | null = null;
 
 const intervalId = setInterval(async () => {
   try {
     currentTick = signDueEntries();
     await currentTick;
-  } catch (error) {
-    console.error("Entry sign error", error.message);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("Entry sign error", error.message);
+    }
   }
 }, 1000);
 

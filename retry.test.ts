@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert";
+import type { AddressInfo } from "node:net";
 import { createServer } from "http";
 import crypto from "crypto";
 import { sign, verify } from "./signer.js";
@@ -19,7 +20,8 @@ test("retrying until success", async () => {
     }
   });
   server.listen(0);
-  const baseUrl = `http://localhost:${server.address().port}`;
+  const { port } = server.address() as AddressInfo;
+  const baseUrl = `http://localhost:${port}`;
 
   const id = "retry-success";
   await redis.del(`delivery:${id}`);
@@ -55,7 +57,8 @@ test("delivery fails until max attempts reached", async () => {
     res.end();
   });
   server.listen(0);
-  const baseUrl = `http://localhost:${server.address().port}`;
+  const { port } = server.address() as AddressInfo;
+  const baseUrl = `http://localhost:${port}`;
 
   const id = "retry-dead";
   await redis.del(`delivery:${id}`);
@@ -89,7 +92,10 @@ test("verify() rejects a signature with the wrong payload, secret, or length", (
   const receivedSignature = sign(data.payload, secret);
 
   assert.strictEqual(verify("fake payload", secret, receivedSignature), false);
-  assert.strictEqual(verify(data.payload, "fake secret", receivedSignature), false);
+  assert.strictEqual(
+    verify(data.payload, "fake secret", receivedSignature),
+    false,
+  );
   assert.strictEqual(verify(data.payload, secret, "fake signature"), false);
 });
 

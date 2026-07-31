@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { verify } from "./signer.js";
+import { verify } from "./signer.ts";
 import express from "express";
 
 const app = express();
@@ -27,9 +27,15 @@ app.post("/", async (req, res) => {
       return res.status(500).json({ message: "internal server error" });
     }
 
+    const subscriberSecret = process.env.SUBSCRIBER_SECRET
+
+    if (!subscriberSecret) {
+      throw new Error('missing subscriber secret environment variable')
+    }
+
     const isValid = verify(
       req.body.payload,
-      process.env.SUBSCRIBER_SECRET,
+      subscriberSecret,
       req.body.hashedPayload,
     );
 

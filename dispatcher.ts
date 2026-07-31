@@ -1,10 +1,10 @@
 import "dotenv/config";
-import { sign } from "./signer.js";
-import redis from "./redis.js";
+import { sign } from "./signer.ts";
+import redis from "./redis.ts";
 
 const BASE_DELAY = 5000; // 5000ms = 5s
 
-export async function getDueEntries(batchSize) {
+export async function getDueEntries(batchSize: number) {
   const dueDeliveryIds = await redis.zrangebyscore(
     "retry:zset",
     "-inf",
@@ -43,6 +43,10 @@ export async function signDueEntries() {
       `subscriber:${data.subscriberId}`,
       "secret",
     );
+    if (data.url == null || data.payload == null || secretLookup == null) {
+      console.log(`skipping ${entry}: missing url or payload or secret`);
+      continue;
+    }
     const hashedPayload = sign(data.payload, secretLookup);
     try {
       const response = await fetch(data.url, {
@@ -77,9 +81,11 @@ export async function signDueEntries() {
         await redis.hset(`delivery:${entry}`, { status: "completed" });
         console.log("job completed");
       }
-    } catch (error) {
-      if (error.name == "TimeoutError") {
-        console.log("request timed out");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        if (error.name == "TimeoutError") {
+          console.log("request timed out");
+        }
       }
       console.log(error);
     }
