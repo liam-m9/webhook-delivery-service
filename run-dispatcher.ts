@@ -2,29 +2,33 @@ import { signDueEntries } from "./dispatcher.ts";
 
 console.log(`Dispatcher starting... `);
 
-let currentTick: Promise<void> | null = null;
+let stopped = false;
 
-const intervalId = setInterval(async () => {
-  try {
-    currentTick = signDueEntries();
-    await currentTick;
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error("Entry sign error", error.message);
+async function loop() {
+  while (!stopped) {
+    try {
+      await signDueEntries();
+    } catch (error: unknown) {
+      if (error instanceof Error)
+        console.error("Entry sign error", error.message);
     }
+    // if still running, pause before next signDueEntries() call 
+    if (!stopped) await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-}, 1000);
+}
+
+const loopPromise = loop();
 
 process.on("SIGINT", async () => {
-  clearInterval(intervalId);
-  await currentTick;
+  stopped = true;
+  await loopPromise;
   console.log("Ended process");
   process.exit();
 });
 
 process.on("SIGTERM", async () => {
-  clearInterval(intervalId);
-  await currentTick;
+  stopped = true;
+  await loopPromise;
   console.log("Ended process");
   process.exit();
 });
