@@ -17,7 +17,7 @@ This document records the architectural decisions, bug fixes, and concurrency fi
 
 ### Trade-offs & Alternatives
 - **Routing missing fields through retries:** Rejected. Retrying invalid configuration wastes Redis operations and delay windows on jobs that are unrecoverable.
-- **Interview Takeaway:** Transport errors and timeouts do not prove delivery failure (the receiver may have processed the payload before dropping the ACK). Retrying is the required behavior for at-least-once durability. Missing structural fields, however, indicate unrecoverable data corruption and are terminated immediately.
+- **Core rationale:** Transport errors and timeouts do not prove delivery failure (the receiver may have processed the payload before dropping the ACK). Retrying is the required behavior for at-least-once durability. Missing structural fields, however, indicate unrecoverable data corruption and are terminated immediately.
 
 ---
 
@@ -33,7 +33,7 @@ Executing `signDueEntries` inside a fixed `setInterval` (e.g. every 1000ms) caus
 
 ### Trade-offs & Alternatives
 - **`isTicking` flag inside `setInterval`:** Rejected. Bailing early still incurs timer overhead every second and requires manual promise tracking to ensure clean shutdown.
-- **Interview Takeaway:** A self-scheduling loop guarantees single-process concurrency by construction. It ensures that in-flight network requests finish cleanly before the process exits.
+- **Core rationale:** A self-scheduling loop guarantees single-process concurrency by construction. It ensures that in-flight network requests finish cleanly before the process exits.
 
 ---
 
@@ -49,7 +49,7 @@ Executing `ZRANGEBYSCORE` followed by `ZREM` as separate Redis commands creates 
 
 ### Trade-offs & Alternatives
 - **String interpolation inside Lua:** Rejected. Dynamically generating Lua script strings changes the script hash, bypassing Redis script caching and inflating memory usage.
-- **Interview Takeaway:** Redis single-threaded execution guarantees that Lua scripts run atomically. Static script parameterization ensures low-overhead execution via `EVALSHA` while eliminating multi-worker claim races.
+- **Core rationale:** Redis single-threaded execution guarantees that Lua scripts run atomically. Static script parameterization ensures low-overhead execution via `EVALSHA` while eliminating multi-worker claim races.
 
 ---
 
@@ -65,7 +65,7 @@ Signing only the payload allowed captured payload-signature pairs to be retransm
 
 ### Trade-offs & Alternatives
 - **Timestamp verification without nonces:** Rejected. Timestamp tolerance limits the attack surface to 5 minutes but still leaves a window for rapid payload retransmission.
-- **Interview Takeaway:** Combining HMAC signatures with timestamp tolerance bounds storage overhead, while atomic Redis `SET NX` locks close replay vulnerabilities within that window.
+- **Core rationale:** Combining HMAC signatures with timestamp tolerance bounds storage overhead, while atomic Redis `SET NX` locks close replay vulnerabilities within that window.
 
 ---
 
@@ -82,7 +82,7 @@ Signing only the payload allowed captured payload-signature pairs to be retransm
 ### Trade-offs & Alternatives
 - **Deduplicating on `nonce` or `signature`:** Rejected. `nonce` is regenerated per attempt for anti-replay security, causing retries to appear as new requests.
 - **Deduplicating on `eventId`:** Rejected. One event fans out to multiple subscribers and does not identify a specific delivery process stream.
-- **Interview Takeaway:** Webhook engines operating over unreliable networks guarantee at-least-once delivery. Exposing a stable `deliveryId` allows consumers to implement idempotency checks, turning at-least-once delivery into effectively-once execution.
+- **Core rationale:** Webhook engines operating over unreliable networks guarantee at-least-once delivery. Exposing a stable `deliveryId` allows consumers to implement idempotency checks, turning at-least-once delivery into effectively-once execution.
 
 ---
 
