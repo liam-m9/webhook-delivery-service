@@ -1,6 +1,6 @@
-# Webhook Delivery Service — Engineering & Hardening Log
+# Webhook Delivery Service — Bug Fixes Log
 
-This document records the architectural decisions, bug fixes, and concurrency hardening implemented for the webhook delivery engine. Each section details the technical root cause, the chosen implementation, trade-offs, and verification.
+This document records the architectural decisions, bug fixes, and concurrency fixes implemented for the webhook delivery engine. Each section details the technical root cause, the chosen implementation, trade-offs, and verification.
 
 ---
 
@@ -86,7 +86,7 @@ Signing only the payload allowed captured payload-signature pairs to be retransm
 
 ---
 
-## Future Hardening Backlog (P2 & P3)
+## Future Bug Fixes Backlog (P2 & P3)
 
 ### [P2] N+1 fan-out in /events (branch: `perf/pipeline-fanout`)
 - **Concept:** Network round-trips as the primary cost model; Redis pipelining (`pipeline()`); moving from `SMEMBERS` to `SSCAN` at scale.

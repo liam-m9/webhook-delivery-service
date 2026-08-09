@@ -1,6 +1,6 @@
-# Webhook Delivery Service — Bug Fixes & Hardening Plan
+# Webhook Delivery Service — Bug Fixes Plan
 
-This document outlines the bug fixes, concurrency hardening items, and technical improvements for the webhook delivery engine.
+This document outlines the bug fixes, concurrency improvements, and technical updates for the webhook delivery engine.
 
 ---
 
@@ -11,7 +11,7 @@ This document outlines the bug fixes, concurrency hardening items, and technical
 
 ---
 
-## Hardening Backlog
+## Bug Fixes Backlog
 
 Legend: **P0** correctness & data durability, **P1** security & idempotency, **P2** scale & telemetry, **P3** boundary typing & error handling.
 
