@@ -3,7 +3,7 @@ import assert from "node:assert";
 import type { AddressInfo } from "node:net";
 import { createServer } from "http";
 import crypto from "crypto";
-import { sign, verify } from "../signer.ts";
+import { sign, verify, buildSignedPayload } from "../signer.ts";
 import { getDueEntries, signDueEntries } from "../dispatcher.ts";
 import redis from "../redis.ts";
 
@@ -11,7 +11,23 @@ test("retrying until success", async () => {
   let callCount = 0;
   const server = createServer((req, res) => {
     callCount += 1;
-    if (callCount <= 2) {
+
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+    req.on("end", () => {
+      const { payload, timestamp, nonce, signature } = JSON.parse(body);
+      const stringToVerify = buildSignedPayload(payload, timestamp, nonce);
+      const isValid = verify(stringToVerify, "shh", signature);
+      if (!isValid) {
+        res.writeHead(401);
+        res.end();
+        return;
+      }
+    });
+
+    if (callCount <= 2) { // Fail first two attempts
       res.writeHead(500);
       res.end();
     } else {
@@ -55,6 +71,21 @@ test("delivery fails until max attempts reached", async () => {
     callCount += 1;
     res.writeHead(500);
     res.end();
+
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+    req.on("end", () => {
+      const { payload, timestamp, nonce, signature } = JSON.parse(body);
+      const stringToVerify = buildSignedPayload(payload, timestamp, nonce);
+      const isValid = verify(stringToVerify, "shh", signature);
+      if (!isValid) {
+        res.writeHead(401);
+        res.end();
+        return;
+      }
+    });
   });
   server.listen(0);
   const { port } = server.address() as AddressInfo;
@@ -87,22 +118,42 @@ test("delivery fails until max attempts reached", async () => {
 });
 
 test("verify() rejects a signature with the wrong payload, secret, or length", () => {
-  const data = { payload: "example payload" };
+  const payload = "example payload";
+  const timestamp = Date.now();
+  const nonce = crypto.randomBytes(16).toString("base64");
   const secret = crypto.randomBytes(10).toString("hex");
-  const receivedSignature = sign(data.payload, secret);
 
-  assert.strictEqual(verify("fake payload", secret, receivedSignature), false);
+  const goodString = buildSignedPayload(payload, timestamp, nonce);
+  const signature = sign(goodString, secret);
+
+  const badStringPayload = buildSignedPayload("fake payload", timestamp, nonce);
+  assert.strictEqual(verify(badStringPayload, secret, signature), false);
+
+  const badStringTimestamp = buildSignedPayload(payload, timestamp + 1, nonce);
+  assert.strictEqual(verify(badStringTimestamp, secret, signature), false);
+
   assert.strictEqual(
-    verify(data.payload, "fake secret", receivedSignature),
+    verify(goodString, "fake secret", signature),
     false,
   );
-  assert.strictEqual(verify(data.payload, secret, "fake signature"), false);
+  assert.strictEqual(verify(goodString, secret, "fake signature"), false);
 });
 
 test("verify() accepts a signature that matches the payload", () => {
-  const data = { payload: "example payload" };
+  const payload = "example payload";
+  const timestamp = Date.now();
+  const nonce = crypto.randomBytes(16).toString("base64");
   const secret = crypto.randomBytes(10).toString("hex");
 
-  const receivedSignature = sign(data.payload, secret);
-  assert.strictEqual(verify(data.payload, secret, receivedSignature), true);
+  const stringToSign = buildSignedPayload(payload, timestamp, nonce);
+  const signature = sign(stringToSign, secret);
+
+  assert.strictEqual(verify(stringToSign, secret, signature), true);
+});
+
+test("receiver rejects a replayed nonce", async () => {
+  const nonce = "replay-test-nonce";
+  await redis.set(`nonce:${nonce}`, "1", "EX", 300, "NX");
+  const result = await redis.set(`nonce:${nonce}`, "1", "EX", 300, "NX");
+  assert.strictEqual(result, null);
 });

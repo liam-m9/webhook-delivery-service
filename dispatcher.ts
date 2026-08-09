@@ -1,6 +1,7 @@
 import "dotenv/config";
-import { sign } from "./signer.ts";
+import { sign, buildSignedPayload } from "./signer.ts";
 import redis from "./redis.ts";
+import crypto from 'crypto'
 
 const BASE_DELAY = 5000;
 
@@ -82,7 +83,10 @@ export async function signDueEntries() {
       await redis.hset(`delivery:${id}`, { status: "dead" }); // missing vital data = dead
       continue;
     }
-    const hashedPayload = sign(data.payload, secretLookup);
+    const timestamp = Date.now()
+    const nonce = crypto.randomBytes(16).toString('base64')
+    const builtPayload = buildSignedPayload(data.payload, timestamp, nonce)
+    const hashedBuiltPayload = sign(builtPayload, secretLookup);
     // do we even get a response ?
     let response: Response;
     try {
@@ -92,8 +96,10 @@ export async function signDueEntries() {
         body: JSON.stringify({
           eventId: data.eventId,
           subscriberId: data.subscriberId,
-          hashedPayload: hashedPayload,
           payload: data.payload,
+          timestamp: timestamp,
+          nonce: nonce,
+          signature: hashedBuiltPayload,
         }),
         signal: AbortSignal.timeout(5000),
       });
