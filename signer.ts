@@ -20,3 +20,8 @@ export function verify(payload: string, secret: string, receivedSignature: strin
   return isValid;
 }
 
+// payload, timestamp, nonce
+export function buildSignedPayload(payload: string, timestamp: number, nonce: string) {
+  return `${payload}.${timestamp}.${nonce}`
+}
+
