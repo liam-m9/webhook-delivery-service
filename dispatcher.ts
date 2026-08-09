@@ -94,6 +94,7 @@ export async function signDueEntries() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          deliveryId: id,
           eventId: data.eventId,
           subscriberId: data.subscriberId,
           payload: data.payload,
