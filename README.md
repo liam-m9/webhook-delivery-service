@@ -84,7 +84,7 @@ The tests need a running Redis instance, `docker compose up -d --wait` provides 
 
 `tests/failure.test.ts` proves failures can't strand a delivery: a transport-level failure (connection refused or timeout with no HTTP response) requeues the delivery with backoff and eventually marks it `dead` at `max_attempts`, and a malformed delivery record (missing url or secret) is marked `dead` immediately instead of being retried forever.
 
-`tests/replay.test.ts` proves the receiver correctly rejects a replayed nonce.
+Tests in `tests/retry.test.ts` cover nonce-cache replay detection and signature rejection when the signed timestamp is altered. The receiver's five-minute stale-timestamp branch is implemented but not directly integration-tested.
 
 ## Design decisions
 
@@ -100,7 +100,7 @@ The tests need a running Redis instance, `docker compose up -d --wait` provides 
 
 **Why is `deliveryId` exposed in the POST payload sent to subscribers?** At-least-once delivery over networks means retries can happen after the receiver has already processed a webhook. Consumers need a stable idempotency key to deduplicate retries. Because `nonce` and `timestamp` change on every attempt for replay protection, a retry carries a fresh nonce and looks brand new to the receiver. Exposing `deliveryId` (which is generated at ingest and stays constant across all retries) gives the consumer a stable key to skip duplicate work and return 200 OK so the dispatcher stops retrying.
 
-**Why split `dispatcher.ts` and `run-dispatcher.ts` into two files, mirroring the `worker.js`/`run-worker.js` pattern from the sibling job-queue-service project?** Mainly to avoid side effects on import. If `signDueEntries` and the polling loop lived in the same file, importing it anywhere (like in `retry.test.ts`) would start the polling loop automatically, whether you wanted it running or not. Keeping them separate means `dispatcher.ts` can be imported and called as many times as needed with nothing running in the background, which makes it actually testable, and it means the runner is swappable, the same `signDueEntries` function could be driven by a scheduled AWS Lambda instead of the local polling loop without touching the core logic at all.
+**Why split `dispatcher.ts` and `run-dispatcher.ts` into two files, mirroring the `worker.ts`/`run-worker.ts` pattern from the sibling job-queue-service project?** Mainly to avoid side effects on import. If `signDueEntries` and the polling loop lived in the same file, importing it anywhere (like in `retry.test.ts`) would start the polling loop automatically, whether you wanted it running or not. Keeping them separate means `dispatcher.ts` can be imported and called as many times as needed with nothing running in the background, which makes it actually testable, and it means the runner is swappable, the same `signDueEntries` function could be driven by a scheduled AWS Lambda instead of the local polling loop without touching the core logic at all.
 
 ## Known limitations
 
