@@ -1,4 +1,4 @@
-# Webhook Delivery Service — Bug Fixes Plan
+# Webhook Delivery Service - Bug Fixes Plan
 
 This document outlines the bug fixes, concurrency improvements, and technical updates for the webhook delivery engine.
 
@@ -35,14 +35,14 @@ Legend: **P0** correctness & data durability, **P1** security & idempotency, **P
 - **Where:** `dispatcher.ts`, `getDueEntries`
 - **Problem:** `ZRANGEBYSCORE` and `ZREM` executed as two separate Redis commands. Multiple concurrent dispatcher workers could both read the same due delivery IDs before removal, dispatching duplicate webhooks.
 - **Fix approach:** Execute range read and removal inside a single Redis Lua script (`EVAL`).
-- **Concept:** Single-threaded Redis execution model; atomic Lua script evaluation (`EVALSHA`).
+- **Concept:** Single-threaded Redis execution model; atomic Lua script evaluation through `EVAL`.
 - **Branch:** `fix/atomic-claim-lua`
 - **Status:** done
 
 ### [P1] No replay protection
 - **Where:** `signer.ts`, `dispatcher.ts`, `receiver.ts`
 - **Problem:** Signing only the payload allowed captured payload-signature pairs to be replayed indefinitely.
-- **Fix approach:** Sign `${timestamp}.${nonce}.${payload}`. Receiver validates signatures, enforces a 5-minute timestamp window, and executes `SET nonce 1 EX 300 NX` in Redis to reject duplicate nonces.
+- **Fix approach:** Sign `${payload}.${timestamp}.${nonce}`. Receiver validates signatures, enforces a 5-minute timestamp window, and executes `SET nonce 1 EX 300 NX` in Redis to reject duplicate nonces.
 - **Concept:** Webhook replay attack vectors; signed timestamps and atomic nonce caching.
 - **Branch:** `fix/signed-timestamp-replay`
 - **Status:** done
@@ -50,7 +50,7 @@ Legend: **P0** correctness & data durability, **P1** security & idempotency, **P
 ### [P1] No idempotency key exposed to consumers
 - **Where:** `server.ts`, `dispatcher.ts`
 - **Problem:** `deliveryId` was generated at ingestion but omitted from the POST body sent to receivers. Because `nonce` and `timestamp` change on every retry attempt for replay security, consumers could not distinguish retries from new delivery attempts.
-- **Fix approach:** Pass `deliveryId: id` in the POST payload sent by `dispatcher.ts`. Receivers use `deliveryId` to deduplicate incoming webhooks and return 200 OK without re-executing business logic.
+- **Fix approach:** Pass `deliveryId: id` in the POST payload sent by `dispatcher.ts`. Real consumers can use it to implement durable deduplication and return 200 OK without re-executing business logic; the simulated receiver does not implement that persistence.
 - **Concept:** At-least-once delivery vs effectively-once consumer processing; stable delivery identifiers.
 - **Branch:** `fix/expose-delivery-id`
 - **Status:** done
@@ -58,6 +58,14 @@ Legend: **P0** correctness & data durability, **P1** security & idempotency, **P
 ---
 
 ## Future Backlog Items
+
+### [P0] Atomic claim has no durable in-flight recovery
+- **Where:** `dispatcher.ts`, `getDueEntries` and terminal/reschedule transitions
+- **Problem:** The Lua claim removes a due ID from `retry:zset`. If the dispatcher process terminates before HTTP completion or `handleFailure`, the delivery hash remains but no scheduling index makes it eligible again.
+- **Fix approach:** First reproduce the crash window deterministically. Then introduce bounded, observable in-flight ownership and recovery while preserving disjoint unexpired claims.
+- **Concept:** Atomic claim versus durable lease; visibility timeout; stalled-job recovery; at-least-once delivery.
+- **Branch:** `fix/durable-inflight-recovery`
+- **Status:** todo
 
 ### [P2] N+1 fan-out in /events
 - **Where:** `server.ts`, `/events`
