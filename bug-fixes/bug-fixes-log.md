@@ -1,4 +1,4 @@
-# Webhook Delivery Service — Bug Fixes Log
+# Webhook Delivery Service - Bug Fixes Log
 
 This document records the architectural decisions, bug fixes, and concurrency fixes implemented for the webhook delivery engine. Each section details the technical root cause, the chosen implementation, trade-offs, and verification.
 
@@ -11,7 +11,7 @@ This document records the architectural decisions, bug fixes, and concurrency fi
 
 ### Solution & Design
 - Consolidated failure processing into `handleFailure(id, attempts, max)` called from both non-200 HTTP responses and network exception handlers.
-- If a delivery fails due to transport errors or 5xx status codes, `handleFailure` increments `attempts` and reschedules the job in `retry:zset` with exponential backoff.
+- If a delivery fails due to a transport error or any non-2xx status, `handleFailure` increments `attempts` and reschedules the job in `retry:zset` with exponential backoff.
 - Missing configuration fields (URL or subscriber secret) transition immediately to `dead` rather than consuming retries, as missing data cannot be resolved by retrying.
 - Narrowed the `try` block scope strictly to the `fetch` execution so Redis write failures during handling do not trigger secondary error loops.
 
@@ -45,11 +45,11 @@ Executing `ZRANGEBYSCORE` followed by `ZREM` as separate Redis commands creates 
 ### Solution & Design
 - Enclosed the range read and removal inside a single Redis Lua script executed via `EVAL`.
 - Because Redis is single-threaded, the Lua script executes atomically to completion before any other command is processed.
-- Parameterized dynamic values (`ARGV`, timestamps, batch limits) via `ARGV` to keep the script string constant, enabling Redis script caching via `EVALSHA`.
+- Parameterized dynamic values such as timestamps and batch limits through `ARGV` so the script text stays constant and values are not interpolated into Lua source.
 
 ### Trade-offs & Alternatives
 - **String interpolation inside Lua:** Rejected. Dynamically generating Lua script strings changes the script hash, bypassing Redis script caching and inflating memory usage.
-- **Core rationale:** Redis single-threaded execution guarantees that Lua scripts run atomically. Static script parameterization ensures low-overhead execution via `EVALSHA` while eliminating multi-worker claim races.
+- **Core rationale:** Redis executes the Lua read-and-remove atomically, eliminating the tested multi-caller claim race. The current code invokes `EVAL`; it does not issue `EVALSHA` explicitly.
 
 ---
 
@@ -59,7 +59,7 @@ Executing `ZRANGEBYSCORE` followed by `ZREM` as separate Redis commands creates 
 Signing only the payload allowed captured payload-signature pairs to be retransmitted indefinitely by malicious actors.
 
 ### Solution & Design
-- Expanded the signed string format to `${timestamp}.${nonce}.${payload}` using HMAC-SHA256.
+- Expanded the signed string format to `${payload}.${timestamp}.${nonce}` using HMAC-SHA256.
 - The receiver validates signature authenticity, rejects timestamps outside a 5-minute tolerance window, and executes `SET nonce 1 EX 300 NX` in Redis.
 - If Redis returns `null`, the nonce was previously registered within the active window, and the request is rejected as a replay attack.
 
@@ -77,16 +77,21 @@ Signing only the payload allowed captured payload-signature pairs to be retransm
 ### Solution & Design
 - Added `deliveryId: id` to the JSON payload sent by `dispatcher.ts`.
 - `deliveryId` remains constant across all retry attempts for a given delivery job.
-- Receivers use `deliveryId` as a stable key to deduplicate incoming webhooks. On duplicate receipt, the consumer skips business logic and returns HTTP `200 OK`, allowing the dispatcher to mark the job `completed` and cease retries.
+- A real consumer can use `deliveryId` as a stable key to deduplicate incoming webhooks, skip repeated business work and return HTTP `200 OK`. The repository's simulated `receiver.ts` exposes and verifies the request but does not persist completed delivery IDs or business results.
 
 ### Trade-offs & Alternatives
 - **Deduplicating on `nonce` or `signature`:** Rejected. `nonce` is regenerated per attempt for anti-replay security, causing retries to appear as new requests.
 - **Deduplicating on `eventId`:** Rejected. One event fans out to multiple subscribers and does not identify a specific delivery process stream.
-- **Core rationale:** Webhook engines operating over unreliable networks guarantee at-least-once delivery. Exposing a stable `deliveryId` allows consumers to implement idempotency checks, turning at-least-once delivery into effectively-once execution.
+- **Core rationale:** Webhook delivery over unreliable networks can repeat an acknowledged business effect. Exposing a stable `deliveryId` gives consumers the key needed to implement durable idempotency, but exposure alone does not provide effectively-once execution.
 
 ---
 
-## Future Bug Fixes Backlog (P2 & P3)
+## Future Bug Fixes Backlog
+
+### [P0] Atomic claim has no durable in-flight recovery (branch: `fix/durable-inflight-recovery`)
+- **Concept:** Atomic claim versus recoverable ownership; visibility deadlines; stalled-delivery recovery.
+- **Current boundary:** Lua returns disjoint due IDs, but it removes them from the only scheduling index. A process termination before completion or rescheduling can leave the delivery hash stranded.
+- **Status:** todo
 
 ### [P2] N+1 fan-out in /events (branch: `perf/pipeline-fanout`)
 - **Concept:** Network round-trips as the primary cost model; Redis pipelining (`pipeline()`); moving from `SMEMBERS` to `SSCAN` at scale.
