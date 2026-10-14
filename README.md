@@ -80,7 +80,7 @@ The tests need a running Redis instance, `docker compose up -d --wait` provides 
 - `verify()` correctly rejects a signature with the wrong payload, secret, or signature
 - `verify()` correctly accepts a signature that genuinely matches
 
-`tests/claim.test.ts` proves the claim step is actually atomic under concurrency: 15 callers claim batches from 100 due deliveries at the same time, and every delivery is claimed exactly once, no double-claims, nothing left behind.
+`tests/claim.test.ts` proves the claim step is actually atomic under concurrency: 15 callers claim batches from 100 due deliveries at the same time, and all 100 are claimed with none claimed twice and nothing left behind.
 
 `tests/failure.test.ts` proves that the tested transport-failure path does not strand a delivery: a connection refusal or timeout with no HTTP response requeues it with backoff and eventually marks it `dead` at `max_attempts`. A malformed delivery record with a missing URL or secret is marked `dead` immediately. This test does not cover a dispatcher process terminating immediately after the Lua claim.
 
@@ -105,7 +105,7 @@ Tests in `tests/retry.test.ts` cover nonce-cache replay detection and signature 
 ## Known limitations
 
 - **No authentication on the ingest API.** Anyone who can reach `server.ts` can register a subscriber or POST an event, no API key, no auth of any kind. Fine for a local demo, not something you'd ship.
-- **Atomic claim without durable in-flight recovery.** Lua prevents simultaneous read-and-remove claims, but a dispatcher process can terminate after removal and before completion or rescheduling. The delivery hash remains while no scheduling index makes it eligible again.
+- **Atomic claim without in-flight recovery.** Lua prevents simultaneous read-and-remove claims, but a dispatcher process can terminate after removal and before completion or rescheduling. The delivery hash remains while no scheduling index makes it eligible again.
 - **Dead deliveries are silently terminal.** Once `status` flips to `dead`, there's no dead-letter queue, no alerting, and no endpoint to inspect how many deliveries have died or why.
 - **Delivery records never expire.** `delivery:{id}` hashes accumulate in Redis forever, since Redis is RAM-backed, this would eventually become a real memory problem at scale.
 - **`receiver.ts` only simulates one subscriber at a time.** It verifies against a single `SUBSCRIBER_SECRET` read from its own `.env`, while `server.ts` correctly generates a unique secret per subscriber and `dispatcher.ts` correctly looks each one up individually. The demo receiver's single hardcoded secret is a shortcut for local testing, not a reflection of how the actual signing/verification logic works, that part is genuinely per-subscriber.
